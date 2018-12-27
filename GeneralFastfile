@@ -1,0 +1,436 @@
+# Customize this file, documentation can be found here:
+# https://docs.fastlane.tools/actions/
+# All available actions: https://docs.fastlane.tools/actions
+# can also be listed using the `fastlane actions` command
+
+# Change the syntax highlighting to Ruby
+# All lines starting with a # are ignored when running `fastlane`
+
+# If you want to automatically update fastlane if a new version is available:
+# update_fastlane
+
+# This is the minimum version number required.
+# Update this, if you use features of a newer version
+fastlane_version "2.89.0"
+
+fastlane_require "open-uri" 
+fastlane_require 'net/http'
+fastlane_require 'json'
+
+default_platform :ios
+
+before_all do 
+    # 把编译超时时间设置长一些，以防因超时导致编译失败
+    ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
+    ENV["FASTLANE_XCODE_LIST_TIMEOUT"] = "120"
+    #设置ITC上传方式
+    ENV["DELIVER_ITMSTRANSPORTER_ADDITIONAL_UPLOAD_PARAMETERS"] = "-t DAV"
+    ENV["FASTLANE_ITUNES_TRANSPORTER_USE_SHELL_SCRIPT"] = "1"
+ end
+
+
+  desc "perform a task, 接受参数type,值可为appstore, adhoc, development, enterprise;参数"
+  lane :task do |options|
+    # 获得选项，可以是appstore, adhoc, enterprise, development
+    type = options[:type]
+    # 是否应该上传
+    shouldUpload = options[:upload]
+    if shouldUpload.nil?
+      shouldUpload = true
+    end
+    # projPath = options[]
+
+    pgyerUrl = ENV['PGYER_URL']  #蒲公英 地址
+    appName = ENV['APP_NAME'] # APP 名称
+
+    bundle_id = ENV['APP_IDENTIFIER'] 
+    scheme = ENV['APP_SCHEME']
+
+    #同步证书
+    sync_code_signing(type: type,readonly: true)
+
+
+    # 获取 export_method
+    export_method = get_export_method(type:type)
+    # 生成IPA包名称
+    output_name = gen_ipa_output_name(type:type)
+    # 获取描述文件名称
+    provisioning = get_provisioning_name(type:type)
+    # 获取编译配置名称
+    configuration = get_build_configuration(type:type)
+
+    # 增加版本号 或者 build 号
+    increment_versionNumber_or_buildNumber(type:type);
+
+    # cocoapods
+    cocoapods
+
+    # 修改证书签名配置
+    cosigner(
+        scheme: ENV['APP_SCHEME'],
+        xcodeproj_path: ENV['PROJECT_PATH'],
+        build_configuration: configuration,
+        profile_name: ENV['sigh_' + bundle_id + '_' + type + '_profile-name']
+    )
+
+    # 编译
+    build_ios_app(output_name: output_name,
+        silent: false,
+        clean: true,
+        export_method: export_method,
+        export_xcargs: "-allowProvisioningUpdates",
+        configuration: configuration,
+        export_options: {
+                  provisioningProfiles: { 
+                    bundle_id => provisioning
+                  }
+                })
+
+    #如果为false则跳过发布上传
+    if shouldUpload == false
+      next
+    end
+
+    # deliver
+    output_directory = ENV["IPA_OUT_DIR"]
+    if type == "appstore"
+      # default
+      ENV["DELIVER_ITMSTRANSPORTER_ADDITIONAL_UPLOAD_PARAMETERS"] = "-t DAV"
+      upload_to_app_store
+    end
+
+    if type == "adhoc"
+      #上传到蒲公英
+      pgyer(api_key: "bac0d4b01086be8c8cf0eb92d9bf13b3", user_key: "3330740c8718eddd1a0b4546aff22689")
+
+      #发送钉钉消息
+      version_number = get_version_number_from_plist(scheme: scheme)
+      build_number = get_build_number_from_plist(scheme: scheme)
+      installurl = pgyerUrl #蒲公英地址
+
+      notify_app_release(token: "a01dfa5804bca2c014f045a1bfef5e8b4ab308ebb5e7f64c8f2307bd469ef244",
+                         appName: appName,
+                         versionNumber: version_number,
+                         buildNumber: build_number,
+                         appUrl: installurl)
+
+    end
+
+    if type == "development"
+      puts "敬请期待..."
+    end
+
+    if type == "enterprise"
+      puts "敬请期待..."
+    end
+
+  end
+
+  desc "get_export_method,  接受参数type,值可以是: appstore, adhoc, development 或 enterprise"
+  lane :get_export_method do |options|
+    type = options[:type]
+    list = {
+      "appstore" => "app-store",
+      "adhoc" => "ad-hoc",
+      "enterprise" => "enterprise",
+      "development" => "development"
+    }
+    list[type]
+  end
+
+  desc "gen_ipa_output_name, 接受参数type,值可以是: appstore, adhoc, development 或 enterprise"
+  lane :gen_ipa_output_name do |options|
+    type = options[:type]
+    scheme = ENV['APP_SCHEME']
+    now = Time.now.strftime("%Y-%m-%d_%H-%M-%S")
+    output_name = "#{scheme}_#{now}_#{type}.ipa"
+  end
+
+  desc "get_provisioning_name, 接受参数type,值可以是: appstore, adhoc, development 或 enterprise"
+  lane :get_provisioning_name do |options|
+    type = options[:type]
+    bundle_id = ENV["APP_IDENTIFIER"]
+    list = {
+      "appstore" => "AppStore",
+      "adhoc" => "AdHoc",
+      "development" => "Development",
+      "enterprise" => "InHouse"
+    }
+    provisioning_name = "match #{list[type]} #{bundle_id}"
+  end
+
+  desc "get_build_configuration, 接受参数type,值可以是: appstore, adhoc, development 或 enterprise"
+  lane :get_build_configuration do |options|
+    type = options[:type]
+    list = {
+      "appstore" => "Release",
+      "adhoc" => "Ad Hoc",
+      "development" => "Debug",
+      "enterprise" => "Enterprise"
+    }
+    list[type]
+  end
+
+  desc "is app existing in appstore?, params: bundle_id"
+  lane :is_app_in_appstore do |options|
+    bundle_id = options[:bundle_id]
+    now = Time.now.strftime("%Y%m%d%H%M%S")
+    uri = URI("https://itunes.apple.com/lookup?bundleId=#{bundle_id}&country=cn&fetchTime=#{now}")
+    Net::HTTP.get(uri)
+    response = Net::HTTP.get_response(uri)
+    puts "uri:#{uri},body:#{response.body}"
+    UI.crash!("Action:is_app_in_appstore error:Unexpected status code from iTunes Search API") unless response.kind_of?(Net::HTTPSuccess)
+    response.body.length > 50
+  end
+
+
+  desc "increment_versionNumber_or_buildNumber, 接受参数type,值可为appstore, adhoc, development, enterprise"
+  lane :increment_versionNumber_or_buildNumber do |options|
+    type = options[:type]
+    scheme = ENV['APP_SCHEME']
+    bundle_id = ENV['APP_IDENTIFIER']
+
+    appstoreVersion = get_app_version_in_appstore(bundle_id: bundle_id)
+    plistVersion = get_version_number_from_plist(scheme: scheme)
+          #如果appstore 版本和 info.plist中的版本一致 则需要增加版本号 否则说明已经增加过版本号，只需增加build就行
+    if appstoreVersion == plistVersion
+        puts "appstoreVersion:#{appstoreVersion},plistVersion#{plistVersion}"
+        increment_version_number_in_plist(
+          scheme: scheme
+        )
+        # 如果版本号增加了，那么重置build number 为 1
+        increment_build_number_in_plist(
+          scheme: scheme,
+          build_number: "1" # set build number to 1
+        )
+    else
+      increment_build_number_in_plist(
+          scheme: scheme
+        ) 
+    end
+  end
+
+  desc "发送消息到钉钉"
+  lane :send_message_to_dingtalk do |options|
+    msg = options[:message]
+    url = "https://oapi.dingtalk.com/robot/send?access_token=06e9c9c0f002e22abbae5adec7a09082e84eed423a8e26779514a23345e9a77a"
+    toSend = { msgtype: "text", 
+                text: {
+                    content: msg
+                }, 
+                at: {
+                    atMobiles: [
+                        "13015957075"
+                    ],
+                    isAtAll: false
+                }
+             }
+    uri = URI.parse(url)
+    https = Net::HTTP.new(uri.host, uri.port)
+    https.use_ssl = true
+
+    req = Net::HTTP::Post.new(uri.request_uri)
+    req.add_field('Content-Type', 'application/json')
+    req.body = toSend.to_json
+    res = https.request(req)
+    puts "------------------------------"
+    puts "Response #{res.code} #{res.message}: #{res.body}"
+  end
+
+  desc "钉钉机器人发送消息通知app测试版已经发布"
+  lane :notify_app_release do |options|
+    token = options[:token]
+    appName = options[:appName]
+    versionNumber = options[:versionNumber]
+    buildNumber = options[:buildNumber]
+    installUrl = options[:appUrl]
+    url = "https://oapi.dingtalk.com/robot/send?access_token=#{token}"
+    toSend = {
+              msgtype: "actionCard",
+              actionCard: {
+                          title: "",
+                          text: "### #{appName} #{versionNumber}(#{buildNumber})\n",
+                          singleTitle: "扫码安装👉👉",
+                          singleURL: installUrl
+                        }
+              }
+    uri = URI.parse(url)
+    https = Net::HTTP.new(uri.host, uri.port)
+    https.use_ssl = true
+    req = Net::HTTP::Post.new(uri.request_uri)
+    req.add_field('Content-Type', 'application/json')
+    req.body = toSend.to_json
+    res = https.request(req)
+  end
+
+  desc "Download metadata"
+ lane :upload_metadata do
+    ENV["DELIVER_ITMSTRANSPORTER_ADDITIONAL_UPLOAD_PARAMETERS"] = "-t DAV"
+    upload_to_app_store(ipa:ENV["IPA_PATH_UPLOAD"])
+    # sh('bundle exec fastlane deliver download_metadata -m "$METADATA_PATH" -u $ITUNESCONNECT_USERNAME -a $BUNDLE_ID')
+ end
+
+  desc "Download metadata"
+ lane :metadata do
+    sh('bundle exec fastlane deliver download_metadata -m "$METADATA_PATH" -u $ITUNESCONNECT_USERNAME -a $BUNDLE_ID')
+ end
+ 
+  desc "Download metadata"
+ lane :screenshots do
+    # sh('bundle exec fastlane deliver download_screenshots -w "$SCREENSHOTS_PATH" -u $ITUNESCONNECT_USERNAME -a $BUNDLE_ID')
+ end
+
+ desc "Only upload ipa to appstore"
+ lane :only_upload_ipa do |options|
+  ipa = options[:ipa]
+  ENV["DELIVER_ITMSTRANSPORTER_ADDITIONAL_UPLOAD_PARAMETERS"] = "-t DAV"
+  puts "ipa:#{ipa}"
+  upload_to_app_store(ipa:ipa,
+                      skip_screenshots: true,
+                      skip_metadata: true)
+ end
+
+
+ desc "Only upload metadata to appstore"
+ lane :only_upload_metadata do |options|
+  path = options[:metadata_path]
+  upload_to_app_store(metadata_path: path,
+                      skip_screenshots: true,
+                      skip_binary_upload: true)
+ end
+
+
+ desc "register devices"
+ lane :reg_devices do
+  register_devices(
+    devices_file: "/Users/fallrainy/Home/Documents/Data/devices.txt"
+  )
+ end
+
+
+desc "sync enterprise signing"
+ lane :sync_enterprise_signing do
+  sync_code_signing(type:"enterprise")
+ end
+
+  desc "sync appstore signing"
+ lane :sync_appstore_signing do
+  sync_code_signing(type:"appstore")
+ end
+
+  desc "sync adhoc signing"
+ lane :sync_adhoc_signing do
+  sync_code_signing(type: "adhoc", force_for_new_devices: true)
+ end
+
+ desc "sync push signing"
+ lane :sync_push_cert do
+  app_identifier = ENV["APP_IDENTIFIER"]
+  get_push_certificate(
+  force: false, # create a new profile, even if the old one is still valid
+  app_identifier: app_identifier, # optional app identifier,
+  p12_password: "xdb201503",
+  save_private_key: true,
+  new_profile: proc do |profile_path| # this block gets called when a new profile was generated
+    puts profile_path # the absolute path to the new PEM file
+    # insert the code to upload the PEM file to the server
+    end
+  )
+ end
+
+  desc "Delete info plist value for key"
+  lane :delete_info_plist_value do |options|
+    info_plist_path = options[:path]
+    key = options[:key]
+    if !get_info_plist_value(path: info_plist_path,key: key).nil?
+      Dir.chdir("..") do
+        sh "/usr/libexec/PlistBuddy -c \"Delete :#{key}\" '#{info_plist_path}'"
+      end
+    end
+  end
+
+  desc "Read signing identity from .mobileprovision file"
+  lane :mobileprovision_signing_identity do |options|
+    provisionPath = options[:path]
+    #将mobileprovision文件转为plist格式
+    output_plist_file = "/tmp/#{SecureRandom.uuid}.plist"
+    sh("security cms -D -i '#{provisionPath}' -o '#{output_plist_file}'", log: true)      
+    profile_plist = Plist.parse_xml(output_plist_file)
+    #读取DeveloperCertificates字段的值
+    cert_str = profile_plist['DeveloperCertificates'].first.string
+    decoded_cert_file = "/tmp/#{SecureRandom.uuid}"
+    File.write(decoded_cert_file, cert_str)
+    #转换格式并提取 signing_identity
+    signing_identity = sh("cat #{decoded_cert_file} | openssl x509 -noout -inform DER -subject | sed 's/^.*CN=\\([^\\/]*\\)\\/.*$/\\1/'", log:true)
+    #删除临时文件
+    sh("rm -rf #{output_plist_file} | rm -rf #{decoded_cert_file}")
+    #去除末尾的换行回车符
+    $\ = "\r\n"
+    signing_identity.chomp
+  end
+
+
+  desc "重签名指定的ipa (ipa:路径,version:版本号)"
+  lane :resign_my_ipa do |options|
+    ipaPath = options[:ipa]
+    appVersion = options[:version]
+    adhoc = options[:adhoc]
+    if adhoc.nil?
+      adhoc = false
+    end
+
+    #1.下载描述文件
+    provisionFileName = "#{SecureRandom.uuid}.mobileprovision"
+    provisionOutputDir = "/tmp"
+    get_provisioning_profile(
+      adhoc: adhoc,
+      readonly: true,
+      filename: provisionFileName,
+      output_path: provisionOutputDir
+    )
+    profileFilePath = "#{provisionOutputDir}/#{provisionFileName}"
+
+    #2.从mobileprovision文件中提取 signing identitiy
+    signingIdentity = mobileprovision_signing_identity(path: profileFilePath)
+
+    #3.重签名ipa
+    if appVersion.nil?
+      resign(
+        ipa: ipaPath, # can omit if using the `ipa` action
+        signing_identity: signingIdentity,
+        provisioning_profile: profileFilePath, # can omit if using the _sigh_ action
+      )
+    else
+      resign(
+        ipa: ipaPath, # can omit if using the `ipa` action
+        signing_identity: signingIdentity,
+        provisioning_profile: profileFilePath, # can omit if using the _sigh_ action
+        short_version: appVersion
+      )
+    end
+    #4.删除mobileprovision文件
+    sh("rm -rf #{profileFilePath}")
+  end
+
+  desc "获取APP在App Store上的版本"
+  lane :get_app_version_in_appstore do |options|
+    bundle_id = options[:bundle_id]
+    now = Time.now.strftime("%Y%m%d%H%M%S")
+    uri = URI("https://itunes.apple.com/lookup?bundleId=#{bundle_id}&country=cn&fetchTime=#{now}")
+    Net::HTTP.get(uri)
+    response = Net::HTTP.get_response(uri)
+    UI.crash!("Unexpected status code from iTunes Search API") unless response.kind_of?(Net::HTTPSuccess)
+    response_body = JSON.parse(response.body)
+    app_version = "0"
+    if response_body["resultCount"] > 0
+      app_version = response_body["results"][0]["version"]
+    end
+    puts "APP current AppStore version:#{app_version}"
+    app_version
+  end
+  
+# More information about multiple platforms in fastlane: https://docs.fastlane.tools/advanced/#control-configuration-by-lane-and-by-platform
+# All available actions: https://docs.fastlane.tools/actions
+
+# fastlane reports which actions are used. No personal data is recorded.
+# Learn more at https://docs.fastlane.tools/#metrics

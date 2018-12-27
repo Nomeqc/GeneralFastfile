@@ -101,18 +101,21 @@ before_all do
 
     if type == "adhoc"
       #上传到蒲公英
-      pgyer(api_key: "bac0d4b01086be8c8cf0eb92d9bf13b3", user_key: "3330740c8718eddd1a0b4546aff22689")
+      pgyer
+      #获得App相关信息
+      page_url = Actions.lane_context[SharedValues::PGYER_PAGE_URL]
+      appName =  Actions.lane_context[SharedValues::PGYER_APP_NAME]
+      version = Actions.lane_context[SharedValues::PGYER_APP_VERSION]
+      buildNumber = Actions.lane_context[SharedValues::PGYER_APP_BUILD]
+      # #发送钉钉消息
+      # version_number = get_version_number_from_plist(scheme: scheme)
+      # build_number = get_build_number_from_plist(scheme: scheme)
+      # installurl = page_url #蒲公英地址
 
-      #发送钉钉消息
-      version_number = get_version_number_from_plist(scheme: scheme)
-      build_number = get_build_number_from_plist(scheme: scheme)
-      installurl = pgyerUrl #蒲公英地址
-
-      notify_app_release(token: "a01dfa5804bca2c014f045a1bfef5e8b4ab308ebb5e7f64c8f2307bd469ef244",
-                         appName: appName,
-                         versionNumber: version_number,
-                         buildNumber: build_number,
-                         appUrl: installurl)
+      notify_app_release(appName: appName,
+                         versionNumber: version,
+                         buildNumber: buildNumber,
+                         appUrl: page_url)
 
     end
 
@@ -213,14 +216,16 @@ before_all do
   desc "发送消息到钉钉"
   lane :send_message_to_dingtalk do |options|
     msg = options[:message]
-    url = "https://oapi.dingtalk.com/robot/send?access_token=06e9c9c0f002e22abbae5adec7a09082e84eed423a8e26779514a23345e9a77a"
-    toSend = { msgtype: "text", 
+    token = ENV['DINGTALK_TOKEN']
+    atMobile = ENV['DINGTALK_AT_MOBILE']
+    url = "https://oapi.dingtalk.com/robot/send?access_token=#{token}"
+    toSend = {  msgtype: "text", 
                 text: {
                     content: msg
                 }, 
                 at: {
                     atMobiles: [
-                        "13015957075"
+                        atMobile
                     ],
                     isAtAll: false
                 }
@@ -239,7 +244,7 @@ before_all do
 
   desc "钉钉机器人发送消息通知app测试版已经发布"
   lane :notify_app_release do |options|
-    token = options[:token]
+    token = ENV['DINGTALK_TOKEN']
     appName = options[:appName]
     versionNumber = options[:versionNumber]
     buildNumber = options[:buildNumber]
@@ -302,9 +307,7 @@ before_all do
 
  desc "register devices"
  lane :reg_devices do
-  register_devices(
-    devices_file: "/Users/fallrainy/Home/Documents/Data/devices.txt"
-  )
+  register_devices
  end
 
 

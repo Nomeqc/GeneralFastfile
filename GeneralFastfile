@@ -38,17 +38,12 @@ before_all do
     if shouldUpload.nil?
       shouldUpload = true
     end
-    # projPath = options[]
-
-    pgyerUrl = ENV['PGYER_URL']  #蒲公英 地址
-    appName = ENV['APP_NAME'] # APP 名称
-
+    
     bundle_id = ENV['APP_IDENTIFIER'] 
     scheme = ENV['APP_SCHEME']
 
     #同步证书
     sync_code_signing(type: type,readonly: true)
-
 
     # 获取 export_method
     export_method = get_export_method(type:type)
@@ -103,10 +98,10 @@ before_all do
       #上传到蒲公英
       pgyer
       #获得App相关信息
-      page_url = Actions.lane_context[SharedValues::PGYER_PAGE_URL]
-      appName =  Actions.lane_context[SharedValues::PGYER_APP_NAME]
-      version = Actions.lane_context[SharedValues::PGYER_APP_VERSION]
-      buildNumber = Actions.lane_context[SharedValues::PGYER_APP_BUILD]
+      page_url = lane_context[SharedValues::PGYER_PAGE_URL]
+      appName =  lane_context[SharedValues::PGYER_APP_NAME]
+      version = lane_context[SharedValues::PGYER_APP_VERSION]
+      buildNumber = lane_context[SharedValues::PGYER_APP_BUILD]
       # #发送钉钉消息
       # version_number = get_version_number_from_plist(scheme: scheme)
       # build_number = get_build_number_from_plist(scheme: scheme)
@@ -282,7 +277,7 @@ before_all do
  
   desc "Download metadata"
  lane :screenshots do
-    # sh('bundle exec fastlane deliver download_screenshots -w "$SCREENSHOTS_PATH" -u $ITUNESCONNECT_USERNAME -a $BUNDLE_ID')
+    sh('bundle exec fastlane deliver download_screenshots -w "$SCREENSHOTS_PATH" -u $ITUNESCONNECT_USERNAME -a $BUNDLE_ID')
  end
 
  desc "Only upload ipa to appstore"

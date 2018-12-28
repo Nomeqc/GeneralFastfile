@@ -264,13 +264,6 @@ before_all do
   end
 
   desc "Download metadata"
- lane :upload_metadata do
-    ENV["DELIVER_ITMSTRANSPORTER_ADDITIONAL_UPLOAD_PARAMETERS"] = "-t DAV"
-    upload_to_app_store(ipa:ENV["IPA_PATH_UPLOAD"])
-    # sh('bundle exec fastlane deliver download_metadata -m "$METADATA_PATH" -u $ITUNESCONNECT_USERNAME -a $BUNDLE_ID')
- end
-
-  desc "Download metadata"
  lane :metadata do
     sh('bundle exec fastlane deliver download_metadata -m "$METADATA_PATH" -u $ITUNESCONNECT_USERNAME -a $BUNDLE_ID')
  end
@@ -298,13 +291,6 @@ before_all do
                       skip_screenshots: true,
                       skip_binary_upload: true)
  end
-
-
- desc "register devices"
- lane :reg_devices do
-  register_devices
- end
-
 
 desc "sync enterprise signing"
  lane :sync_enterprise_signing do

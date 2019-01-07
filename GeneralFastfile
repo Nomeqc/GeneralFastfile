@@ -413,7 +413,7 @@ desc "sync enterprise signing"
   lane :init_ci do |options|
     # sh "bundle update"
     setup_jenkins
-    install_plugins
+    # install_plugins
   end
   
 # More information about multiple platforms in fastlane: https://docs.fastlane.tools/advanced/#control-configuration-by-lane-and-by-platform

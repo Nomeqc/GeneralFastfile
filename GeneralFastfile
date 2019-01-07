@@ -103,10 +103,6 @@ before_all do
       version = lane_context[SharedValues::PGYER_APP_VERSION]
       buildNumber = lane_context[SharedValues::PGYER_APP_BUILD]
       # #发送钉钉消息
-      # version_number = get_version_number_from_plist(scheme: scheme)
-      # build_number = get_build_number_from_plist(scheme: scheme)
-      # installurl = page_url #蒲公英地址
-
       notify_app_release(appName: appName,
                          versionNumber: version,
                          buildNumber: buildNumber,
@@ -411,6 +407,13 @@ desc "sync enterprise signing"
     end
     puts "APP current AppStore version:#{app_version}"
     app_version
+  end
+
+  desc "Initialize for CI"
+  lane :init_ci do |options|
+    sh "bundle update"
+    setup_jenkins
+    install_plugins
   end
   
 # More information about multiple platforms in fastlane: https://docs.fastlane.tools/advanced/#control-configuration-by-lane-and-by-platform

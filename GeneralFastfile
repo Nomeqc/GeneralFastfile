@@ -411,7 +411,7 @@ desc "sync enterprise signing"
 
   desc "Initialize for CI"
   lane :init_ci do |options|
-    sh "bundle update"
+    # sh "bundle update"
     setup_jenkins
     install_plugins
   end

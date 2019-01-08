@@ -69,7 +69,8 @@ before_all do
     )
 
     # 编译
-    build_ios_app(output_name: output_name,
+    build_ios_app(scheme: scheme,
+      output_name: output_name,
         silent: false,
         clean: true,
         export_method: export_method,

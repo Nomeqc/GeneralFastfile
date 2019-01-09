@@ -42,8 +42,12 @@ before_all do
     bundle_id = ENV['APP_IDENTIFIER'] 
     scheme = ENV['APP_SCHEME']
 
+    #创建一个临时keychain并解锁
+    ensure_temp_keychain 'fastlane_enterprise'
     #同步证书
-    sync_code_signing(type: type,readonly: true)
+    sync_code_signing(type: type,
+                      readonly: true,
+                      keychain_name: 'fastlane_enterprise')
 
     # 获取 export_method
     export_method = get_export_method(type:type)
@@ -415,6 +419,18 @@ desc "sync enterprise signing"
     # sh "bundle update"
     setup_jenkins
     # install_plugins
+  end
+
+  def ensure_temp_keychain(name)
+    delete_keychain(
+      name: name
+    ) if File.exist? File.expand_path("~/Library/Keychains/#{name}-db")
+    create_keychain(
+      name: name,
+      password: 'temppassword',
+      unlock: true,
+      timeout: false
+    )
   end
   
 # More information about multiple platforms in fastlane: https://docs.fastlane.tools/advanced/#control-configuration-by-lane-and-by-platform

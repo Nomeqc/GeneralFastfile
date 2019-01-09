@@ -43,11 +43,13 @@ before_all do
     scheme = ENV['APP_SCHEME']
 
     #创建一个临时keychain并解锁
-    ensure_temp_keychain 'fastlane_enterprise'
+    # ensure_temp_keychain 'fastlane_enterprise'
     #同步证书
     sync_code_signing(type: type,
-                      readonly: true,
-                      keychain_name: 'fastlane_enterprise')
+                      readonly: true)
+    # sync_code_signing(type: type,
+    #                   readonly: true,
+    #                   keychain_name: 'fastlane_enterprise')
 
     # 获取 export_method
     export_method = get_export_method(type:type)

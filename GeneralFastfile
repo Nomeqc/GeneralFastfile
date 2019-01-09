@@ -70,7 +70,7 @@ before_all do
         xcodeproj_path: ENV['PROJECT_PATH'],
         build_configuration: configuration,
         profile_name: ENV['sigh_' + bundle_id + '_' + type + '_profile-name'],
-        profile_uuid: ENV['sigh_' + bundle_id + '_' + type
+        profile_uuid: ENV['sigh_' + bundle_id + '_' + type]
     )
 
     # 编译

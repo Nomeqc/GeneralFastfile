@@ -48,6 +48,7 @@ before_all do
     sync_code_signing(type: type,
                       keychain_name: 'fastlane_signing',
                       keychain_password: 'password',
+                      clone_branch_directly: true,
                       readonly: true)
 
     # 获取 export_method
@@ -418,9 +419,7 @@ desc "sync enterprise signing"
 
   desc "Initialize for CI"
   lane :init_ci do |options|
-    # sh "bundle update"
     setup_jenkins
-    # install_plugins
   end
 
   def ensure_temp_keychain(name)

@@ -43,10 +43,11 @@ before_all do
     scheme = ENV['APP_SCHEME']
 
     #创建一个临时keychain并解锁
-    ensure_temp_keychain 'fastlane_signing'
+    keychain_name = "fastlane_#{bundle_id}_signing"
+    ensure_temp_keychain keychain_name
     #同步证书
     sync_code_signing(type: type,
-                      keychain_name: 'fastlane_signing',
+                      keychain_name: keychain_name,
                       keychain_password: 'password',
                       clone_branch_directly: true,
                       readonly: true)

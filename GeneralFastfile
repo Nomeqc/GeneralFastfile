@@ -314,7 +314,6 @@ desc "sync enterprise signing"
   keychain_name = "fastlane_#{bundle_id}_signing"
   ensure_temp_keychain keychain_name
   sync_code_signing(type: "adhoc",
-                    force: true,
                     keychain_name: keychain_name,
                     keychain_password: 'password',
                     force_for_new_devices: true)
